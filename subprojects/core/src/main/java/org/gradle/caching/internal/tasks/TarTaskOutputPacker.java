@@ -228,7 +228,7 @@ public class TarTaskOutputPacker implements TaskOutputPacker {
         TarEntry entry;
         while ((entry = tarInput.getNextEntry()) != null) {
             String name = entry.getName();
-            
+
             boolean outputMissing = name.startsWith("missing-");
             int startOfPropertyName = name.indexOf('-');
             int startOfPath = name.indexOf('/');

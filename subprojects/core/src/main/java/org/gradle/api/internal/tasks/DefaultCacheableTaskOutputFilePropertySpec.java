@@ -21,18 +21,25 @@ import org.gradle.api.internal.file.FileResolver;
 import org.gradle.util.GFileUtils;
 
 import java.io.File;
+import java.util.concurrent.Callable;
 
 public class DefaultCacheableTaskOutputFilePropertySpec extends AbstractTaskOutputPropertySpec implements CacheableTaskOutputFilePropertySpec {
     private final TaskPropertyFileCollection files;
     private final OutputType outputType;
     private final FileResolver resolver;
     private final Object path;
+    private File resolvedPath;
 
     public DefaultCacheableTaskOutputFilePropertySpec(String taskName, FileResolver resolver, OutputType outputType, Object path) {
         this.resolver = resolver;
         this.outputType = outputType;
         this.path = path;
-        this.files = new TaskPropertyFileCollection(taskName, "output", this, resolver, path);
+        this.files = new TaskPropertyFileCollection(taskName, "output", this, resolver, new Callable<File>() {
+            @Override
+            public File call() throws Exception {
+                return getOutputFile();
+            }
+        });
     }
 
     @Override
@@ -42,11 +49,14 @@ public class DefaultCacheableTaskOutputFilePropertySpec extends AbstractTaskOutp
 
     @Override
     public File getOutputFile() {
-        Object unpackedOutput = GFileUtils.unpack(path);
-        if (unpackedOutput == null && isOptional()) {
-            return null;
+        if (resolvedPath == null) {
+            Object unpackedOutput = GFileUtils.unpack(path);
+            if (unpackedOutput == null && isOptional()) {
+                return null;
+            }
+            resolvedPath = resolver.resolve(path);
         }
-        return resolver.resolve(path);
+        return resolvedPath;
     }
 
     @Override
