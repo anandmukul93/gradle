@@ -54,8 +54,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Packages task output to a POSIX TAR file. Because Ant's TAR implementation
@@ -64,7 +62,6 @@ import java.util.regex.Pattern;
  */
 public class TarTaskOutputPacker implements TaskOutputPacker {
     private static final String METADATA_PATH = "METADATA";
-    private static final Pattern PROPERTY_PATH = Pattern.compile("(missing-)?property-([^/]+)(?:/(.*))?");
 
     private final DefaultDirectoryWalkerFactory directoryWalkerFactory;
     private final FileSystem fileSystem;
@@ -204,7 +201,8 @@ public class TarTaskOutputPacker implements TaskOutputPacker {
             @Override
             public void execute(TarInputStream tarInput) {
                 try {
-                    unpack(propertySpecs, tarInput, readOrigin);
+                    unpackMetadata(tarInput, readOrigin);
+                    unpack(propertySpecs, tarInput);
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
@@ -212,42 +210,37 @@ public class TarTaskOutputPacker implements TaskOutputPacker {
         });
     }
 
-    private void unpack(SortedSet<TaskOutputFilePropertySpec> propertySpecs, TarInputStream tarInput, TaskOutputOriginReader readOriginAction) throws IOException {
+    private void unpackMetadata(TarInputStream tarInput, TaskOutputOriginReader readOrigin) throws IOException {
+        TarEntry entry = tarInput.getNextEntry();
+        if (!entry.getName().equals(METADATA_PATH)) {
+            throw new IllegalStateException("Cached result format error, no origin metadata was found.");
+        }
+        readOrigin.execute(new CloseShieldInputStream(tarInput));
+    }
+
+    private void unpack(SortedSet<TaskOutputFilePropertySpec> propertySpecs, TarInputStream tarInput) throws IOException {
         Map<String, TaskOutputFilePropertySpec> propertySpecsMap = Maps.uniqueIndex(propertySpecs, new Function<TaskFilePropertySpec, String>() {
             @Override
             public String apply(TaskFilePropertySpec propertySpec) {
                 return propertySpec.getPropertyName();
             }
         });
-        boolean originSeen = false;
         TarEntry entry;
         while ((entry = tarInput.getNextEntry()) != null) {
             String name = entry.getName();
+            
+            boolean outputMissing = name.startsWith("missing-");
+            int startOfPropertyName = name.indexOf('-');
+            int startOfPath = name.indexOf('/');
+            String propertyName = name.substring(startOfPropertyName+1, startOfPath);
+            String childPath = name.substring(startOfPath+1);
 
-            if (name.equals(METADATA_PATH)) {
-                // handle origin metadata
-                originSeen = true;
-                readOriginAction.execute(new CloseShieldInputStream(tarInput));
-            } else {
-                // handle output property
-                Matcher matcher = PROPERTY_PATH.matcher(name);
-                if (!matcher.matches()) {
-                    throw new IllegalStateException("Cached result format error, invalid contents: " + name);
-                }
-
-                String propertyName = matcher.group(2);
-                CacheableTaskOutputFilePropertySpec propertySpec = (CacheableTaskOutputFilePropertySpec) propertySpecsMap.get(propertyName);
-                if (propertySpec == null) {
-                    throw new IllegalStateException(String.format("No output property '%s' registered", propertyName));
-                }
-
-                boolean outputMissing = matcher.group(1) != null;
-                String childPath = matcher.group(3);
-                unpackPropertyEntry(propertySpec, tarInput, entry, childPath, outputMissing);
+            CacheableTaskOutputFilePropertySpec propertySpec = (CacheableTaskOutputFilePropertySpec) propertySpecsMap.get(propertyName);
+            if (propertySpec == null) {
+                throw new IllegalStateException(String.format("No output property '%s' registered", propertyName));
             }
-        }
-        if (!originSeen) {
-            throw new IllegalStateException("Cached result format error, no origin metadata was found.");
+
+            unpackPropertyEntry(propertySpec, tarInput, entry, childPath, outputMissing);
         }
     }
 
