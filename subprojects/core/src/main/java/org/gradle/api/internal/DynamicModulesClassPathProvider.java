@@ -61,6 +61,7 @@ public class DynamicModulesClassPathProvider implements ClassPathProvider {
     private static final String[] GRADLE_EXTENSION_MODULES = {
         "gradle-workers",
         "gradle-dependency-management",
+        "gradle-script-kotlin-tooling-builders",
         "gradle-plugin-use"
     };
 }
