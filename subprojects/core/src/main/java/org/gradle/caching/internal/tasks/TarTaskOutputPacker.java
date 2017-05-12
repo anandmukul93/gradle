@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.input.CloseShieldInputStream;
@@ -283,7 +284,9 @@ public class TarTaskOutputPacker implements TaskOutputPacker {
         if (isDirEntry) {
             FileUtils.forceMkdir(outputFile);
         } else {
-            Files.asByteSink(outputFile).writeFrom(input);
+            OutputStream outputStream = java.nio.file.Files.newOutputStream(outputFile.toPath());
+            ByteStreams.copy(input, outputStream);
+            outputStream.close();
         }
 
         //noinspection OctalInteger
