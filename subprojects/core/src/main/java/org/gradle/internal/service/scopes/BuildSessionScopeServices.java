@@ -17,6 +17,8 @@
 package org.gradle.internal.service.scopes;
 
 import com.google.common.hash.HashCode;
+import org.gradle.BuildAdapter;
+import org.gradle.BuildResult;
 import org.gradle.StartParameter;
 import org.gradle.api.Action;
 import org.gradle.api.internal.ClassPathRegistry;
@@ -70,6 +72,7 @@ import org.gradle.internal.logging.progress.ProgressLoggerFactory;
 import org.gradle.internal.nativeplatform.filesystem.FileSystem;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.operations.DefaultBuildOperationQueueFactory;
+import org.gradle.internal.operations.dump.DumpingBuildOperationListener;
 import org.gradle.internal.progress.BuildOperationListener;
 import org.gradle.internal.progress.DefaultBuildOperationExecutor;
 import org.gradle.internal.remote.MessagingServer;
@@ -130,7 +133,23 @@ public class BuildSessionScopeServices extends DefaultServiceRegistry {
         return new DefaultDeploymentRegistry();
     }
 
-    BuildOperationExecutor createBuildOperationExecutor(ListenerManager listenerManager, TimeProvider timeProvider, ProgressLoggerFactory progressLoggerFactory, WorkerLeaseService workerLeaseService, StartParameter startParameter, ExecutorFactory executorFactory) {
+    BuildOperationExecutor createBuildOperationExecutor(final ListenerManager listenerManager, TimeProvider timeProvider, ProgressLoggerFactory progressLoggerFactory, WorkerLeaseService workerLeaseService, StartParameter startParameter, ExecutorFactory executorFactory) {
+
+        // TODO: Find a less hacktastic way of injecting this (LD).
+        // See BuildOperationsFixture for usage.
+        final String dumpPath = startParameter.getSystemPropertiesArgs().get(DumpingBuildOperationListener.SYSPROP);
+        if (dumpPath != null) {
+            final DumpingBuildOperationListener dumpingListener = new DumpingBuildOperationListener();
+            listenerManager.addListener(dumpingListener);
+            listenerManager.addListener(new BuildAdapter() {
+                @Override
+                public void buildFinished(BuildResult result) {
+                    listenerManager.removeListener(dumpingListener);
+                    dumpingListener.writeTo(dumpPath);
+                }
+            });
+        }
+
         return new DefaultBuildOperationExecutor(listenerManager.getBroadcaster(BuildOperationListener.class), timeProvider, progressLoggerFactory, new DefaultBuildOperationQueueFactory(workerLeaseService), executorFactory, startParameter.getMaxWorkerCount());
     }
 
