@@ -62,6 +62,8 @@ String compilerMemory = getProperty('compilerMemory')
 String testRunnerMemory = getProperty('testRunnerMemory')
 int testForkEvery = getProperty('testForkEvery') as Integer
 
+sourceSets.main.output.classesDir = file("build/classes/main")
+
 tasks.withType(JavaCompile) {
     options.fork = true
     options.incremental = true
