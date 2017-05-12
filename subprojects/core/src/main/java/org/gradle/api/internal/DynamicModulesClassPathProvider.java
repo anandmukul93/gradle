@@ -20,6 +20,7 @@ import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.classpath.PluginModuleRegistry;
 import org.gradle.internal.classpath.ClassPath;
 
+import java.util.Collections;
 import java.util.Set;
 
 public class DynamicModulesClassPathProvider implements ClassPathProvider {
@@ -36,11 +37,12 @@ public class DynamicModulesClassPathProvider implements ClassPathProvider {
             Set<Module> coreModules = allRequiredModulesOf("gradle-core");
             ClassPath classpath = ClassPath.EMPTY;
             for (String moduleName : GRADLE_EXTENSION_MODULES) {
-                for (Module module : allRequiredModulesOf(moduleName)) {
-                    if (!coreModules.contains(module)) {
-                        classpath = classpath.plus(module.getClasspath());
-                    }
-                }
+                Set<Module> extensionModules = allRequiredModulesOf(moduleName);
+                classpath = plusExtensionModules(extensionModules, classpath, coreModules);
+            }
+            for (String moduleName : GRADLE_OPTIONAL_EXTENSION_MODULES) {
+                Set<Module> optionalExtensionModules = allRequiredModulesOfOptional(moduleName);
+                classpath = plusExtensionModules(optionalExtensionModules, classpath, coreModules);
             }
             for (Module pluginModule : pluginModuleRegistry.getApiModules()) {
                 classpath = classpath.plus(pluginModule.getClasspath());
@@ -58,10 +60,31 @@ public class DynamicModulesClassPathProvider implements ClassPathProvider {
         return moduleRegistry.getModule(name).getAllRequiredModules();
     }
 
+    private Set<Module> allRequiredModulesOfOptional(String moduleName) {
+        Module optionalModule = moduleRegistry.getOptionalModule(moduleName);
+        if (optionalModule != null) {
+            return optionalModule.getAllRequiredModules();
+        }
+        return Collections.emptySet();
+    }
+
+    private ClassPath plusExtensionModules(Set<Module> extensionModules, ClassPath previousClasspath, Set<Module> coreModules) {
+        ClassPath classpath = previousClasspath;
+        for (Module module : extensionModules) {
+            if (!coreModules.contains(module)) {
+                classpath = classpath.plus(module.getClasspath());
+            }
+        }
+        return classpath;
+    }
+
     private static final String[] GRADLE_EXTENSION_MODULES = {
         "gradle-workers",
         "gradle-dependency-management",
-        "gradle-script-kotlin-tooling-builders",
         "gradle-plugin-use"
+    };
+
+    private static final String[] GRADLE_OPTIONAL_EXTENSION_MODULES = {
+        "gradle-script-kotlin-tooling-builders"
     };
 }

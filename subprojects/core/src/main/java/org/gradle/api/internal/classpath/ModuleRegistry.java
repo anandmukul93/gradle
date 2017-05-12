@@ -36,6 +36,14 @@ public interface ModuleRegistry {
     Module getModule(String name) throws UnknownModuleException;
 
     /**
+     * Eventually locates an optional module by name.
+     *
+     * @return the optional module, or {@literal null} if it cannot be found
+     * @throws UnknownModuleException if the requested module is found but one of its dependency is not
+     */
+    Module getOptionalModule(String name) throws UnknownModuleException;
+
+    /**
      * Returns the classpath used to search for modules, in addition to default locations in the Gradle distribution (if available). May be empty.
      */
     ClassPath getAdditionalClassPath();
